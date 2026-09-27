@@ -286,6 +286,22 @@ function details:Render()
         end
 
         if resource then
+            if type(resource.Family) == 'string' and resource.Family ~= '' then
+                imgui.TextColored(self.Header, 'Family:');
+                imgui.SameLine();
+                imgui.Text(resource.Family);
+            end
+            if type(resource.FamilyVariant) == 'string' and resource.FamilyVariant ~= ''
+                and resource.FamilyVariant ~= resource.Family then
+                imgui.TextColored(self.Header, 'Subtype:');
+                imgui.SameLine();
+                imgui.Text(resource.FamilyVariant);
+            end
+            if type(resource.Ecosystem) == 'string' and resource.Ecosystem ~= '' then
+                imgui.TextColored(self.Header, 'Ecosystem:');
+                imgui.SameLine();
+                imgui.Text(resource.Ecosystem);
+            end
             if resource.Job > 0 then
                 imgui.TextColored(self.Header, 'Job:');
                 imgui.SameLine();

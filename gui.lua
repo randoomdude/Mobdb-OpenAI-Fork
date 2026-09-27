@@ -22,6 +22,9 @@ if (ashita.addons_version < 2.2) then
 end
 
 local TokenHelpData = {
+    { Token='$family', Explanation='Monster family, such as Bee or Slime. Blank when unavailable.'},
+    { Token='$familyvariant', Explanation='Specific family subtype, such as Clot. Blank when unavailable.'},
+    { Token='$ecosystem', Explanation='Monster ecosystem, such as Vermin or Amorph. Blank when unavailable.'},
     { Token='$name', Explanation='The name of your current target.'},
     { Token='$index', Explanation='The zone-specific index of your current target.'},
     { Token='$hexindex', Explanation='The zone-specific index of your current target, in hex notation.'},

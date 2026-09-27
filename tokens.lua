@@ -195,6 +195,21 @@ local function PrintDebugFlags()
 end
 
 return {
+    ['$family'] = function(mob, resource)
+        if resource and type(resource.Family) == 'string' and resource.Family ~= '' then
+            gTokenState:DrawText(resource.Family);
+        end
+    end,
+    ['$familyvariant'] = function(mob, resource)
+        if resource and type(resource.FamilyVariant) == 'string' and resource.FamilyVariant ~= '' then
+            gTokenState:DrawText(resource.FamilyVariant);
+        end
+    end,
+    ['$ecosystem'] = function(mob, resource)
+        if resource and type(resource.Ecosystem) == 'string' and resource.Ecosystem ~= '' then
+            gTokenState:DrawText(resource.Ecosystem);
+        end
+    end,
     ['$name'] = function(mob, resource)
         if resource and resource.Name then
             gTokenState:DrawText(resource.Name);

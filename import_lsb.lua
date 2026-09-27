@@ -476,29 +476,70 @@ import.BuildPoolTable = function(self)
     print(chat.header('MobDB') .. chat.message(string.format('Built pool table in %.2fs.  Total Entries:%u', os.clock() - startTime, #self.Pools)));
 end
 
+-- Family labels are SQL strings and can contain commas, quotes, or backslashes.
+local function ParseFamilyValues(values)
+    local fields = {};
+    local index = 1;
+    local escapes = { n = '\n', r = '\r', t = '\t', ['0'] = '\0' };
+    while index <= #values do
+        while values:sub(index, index):match('%s') do index = index + 1; end
+        local value = '';
+        if values:sub(index, index) == "'" then
+            index = index + 1;
+            while index <= #values do
+                local ch = values:sub(index, index);
+                if ch == '\\' then
+                    index = index + 1;
+                    ch = values:sub(index, index);
+                    value = value .. (escapes[ch] or ch);
+                elseif ch == "'" then
+                    if values:sub(index + 1, index + 1) == "'" then
+                        value = value .. "'";
+                        index = index + 1;
+                    else
+                        index = index + 1;
+                        break;
+                    end
+                else
+                    value = value .. ch;
+                end
+                index = index + 1;
+            end
+        else
+            local finish = values:find(',', index, true) or (#values + 1);
+            value = values:sub(index, finish - 1):match('^%s*(.-)%s*$');
+            if value == 'NULL' then value = ''; end
+            index = finish;
+        end
+        fields[#fields + 1] = value;
+        while values:sub(index, index):match('%s') do index = index + 1; end
+        if index <= #values then
+            assert(values:sub(index, index) == ',', 'Invalid family SQL row');
+            index = index + 1;
+        end
+    end
+    return fields;
+end
+
 import.BuildFamilyTable = function(self)
     local startTime = os.clock();
     self.Families = T{};
     local raw = io.open(string.format('%sconfig/addons/mobdb/input/mob_family_system.sql', AshitaCore:GetInstallPath()));
     local lines = raw:lines();
     for line in lines do
-        local _,comment = string.find(line, '%-%-');
-        if comment then
-            line = string.sub(line, 0, comment-1);
-        end
-        if string.match(line, 'INSERT INTO') then
-            local _,start = string.find(line, "%(");
-            local _,finish = string.find(line, "%)");
-            local sub = string.sub(line, start + 1, finish - 1);
-            local split = {};
-            for i in string.gmatch(sub, "([^,]+)") do
-                split[#split + 1] = i;
-            end
-            
+        local values = line:match("^%s*INSERT INTO%s+`mob_family_system`%s+VALUES%s*%((.*)%)%s*;");
+        if values then
+            local split = ParseFamilyValues(values);
+
             local family = {
                 FamilyId = tonumber(split[1]),
+                FamilyVariant = split[2],
+                SuperFamilyId = tonumber(split[3]),
+                FamilyName = split[4] ~= '' and split[4] or split[2],
+                EcosystemId = tonumber(split[5]),
+                EcosystemName = split[6],
                 DetectJob = (humanoid_families:contains(tonumber(split[1])) or humanoid_superfamilies:contains(tonumber(split[3]))),
-                Detection = tonumber(split[23])
+                Detection = tonumber(split[#split - 1])
             };
             self.Families[family.FamilyId] = family;
         end
@@ -607,7 +648,10 @@ import.BuildTables = function(self)
 end
 
 local function WriteMonster(monster, file)
-    file:write(string.format('{ Name=\'%s\', Notorious=%s, Aggro=%s, Link=%s, TrueSight=%s, Job=%d, MinLevel=%d, MaxLevel=%d, Immunities=%d, Respawn=%d, Sight=%s, Sound=%s, Blood=%s, Magic=%s, JA=%s, Scent=%s, Drops={',
+    file:write(string.format('{ Family=%q, FamilyVariant=%q, FamilyId=%d, SuperFamilyId=%d, Ecosystem=%q, EcosystemId=%d, ',
+        monster.Family or '', monster.FamilyVariant or '', monster.FamilyId or 0,
+        monster.SuperFamilyId or 0, monster.Ecosystem or '', monster.EcosystemId or 0));
+    file:write(string.format('Name=\'%s\', Notorious=%s, Aggro=%s, Link=%s, TrueSight=%s, Job=%d, MinLevel=%d, MaxLevel=%d, Immunities=%d, Respawn=%d, Sight=%s, Sound=%s, Blood=%s, Magic=%s, JA=%s, Scent=%s, Drops={',
     string.gsub(monster.Name, '\'', '\\\''), monster.IsNotorious, monster.IsAggro, monster.IsLinking, monster.IsTrueSight, monster.Job, monster.MinLevel, monster.MaxLevel, monster.Immunities, monster.RespawnTime, monster.IsSight, monster.IsSound, monster.IsBlood, monster.IsMagic, monster.IsJA, monster.IsScent));
     
     local first = true;
@@ -706,7 +750,7 @@ import.GenerateData = function(self)
     print(chat.header('MobDB') .. chat.message('Total Success:') .. chat.color1(2, self.SuccessCount) .. chat.message(' Total Failures:') .. chat.color1(2, string.format('%d', self.ProgressCount - self.SuccessCount)) .. chat.message(' Total Time:') .. chat.color1(2, string.format('%.2fs', os.clock() - startTime)));
 end
 
-local CompareFields = { 'Immunities', 'IsNotorious', 'IsAggro', 'IsTrueSight', 'IsLinking', 'IsSight', 'IsSound', 'IsBlood', 'IsMagic', 'IsJA', 'IsScent', 'MinLevel', 'MaxLevel', 'RespawnTime', 'Job' };
+local CompareFields = { 'Family', 'FamilyVariant', 'FamilyId', 'SuperFamilyId', 'Ecosystem', 'EcosystemId', 'Immunities', 'IsNotorious', 'IsAggro', 'IsTrueSight', 'IsLinking', 'IsSight', 'IsSound', 'IsBlood', 'IsMagic', 'IsJA', 'IsScent', 'MinLevel', 'MaxLevel', 'RespawnTime', 'Job' };
 local CompareTables = { 'Modifiers', 'DropPool', 'SpellPool' };
 local function CompareMobs(a,b)
     for _,field in ipairs(CompareFields) do
@@ -776,6 +820,12 @@ import.ProcessMob = function(self, zoneData, mobIndex)
     local detectFlags = family.Detection;
     local newEntry = {
         Name = data.Name,
+        Family = family.FamilyName,
+        FamilyVariant = family.FamilyVariant,
+        FamilyId = family.FamilyId,
+        SuperFamilyId = family.SuperFamilyId,
+        Ecosystem = family.EcosystemName,
+        EcosystemId = family.EcosystemId,
         IsNotorious = data.NM and 'true' or 'false',
         IsAggro = pool.Aggressive and 'true' or 'false',
         IsTrueSight = pool.TrueSight and 'true' or 'false',
